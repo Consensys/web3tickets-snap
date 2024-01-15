@@ -1,0 +1,40 @@
+{
+  "version": "0.2.4",
+  "description": "Chat with Metamask Support",
+  "proposedName": "Web3 Ticketing",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t-vila/web3-tickets"
+  },
+  "source": {
+    "shasum": "RjW4WigQekLHDuRzPaFVk6p46LsolOsljakON6CXU9I=",
+    "location": {
+      "npm": {
+        "filePath": "dist/bundle.js",
+        "packageName": "web3-tickets",
+        "registry": "https://registry.npmjs.org/"
+      }
+    }
+  },
+  "initialPermissions": {
+    "snap_manageState": {},
+    "endowment:rpc": {
+      "dapps": true,
+      "snaps": false
+    },
+    "endowment:cronjob": {
+      "jobs": [
+        {
+          "expression": "* * * * *",
+          "request": {
+            "method": "fireCronjob"
+          }
+        }
+      ]
+    },
+    "snap_dialog": {},
+    "endowment:network-access": {},
+    "snap_notify": {}
+  },
+  "manifestVersion": "0.1"
+}
