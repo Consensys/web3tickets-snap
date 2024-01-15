@@ -7039,6 +7039,7 @@
               comp = comp.value;
             }
           }
+          comp = comp.trim().split(/\s+/).join(' ');
           debug('comparator', comp, options);
           this.options = options;
           this.loose = !!options.loose;
@@ -7126,7 +7127,7 @@
       module.exports = Comparator;
       const parseOptions = require('../internal/parse-options');
       const {
-        re,
+        safeRe: re,
         t
       } = require('../internal/re');
       const cmp = require('../functions/cmp');
@@ -7161,10 +7162,10 @@
           this.options = options;
           this.loose = !!options.loose;
           this.includePrerelease = !!options.includePrerelease;
-          this.raw = range;
-          this.set = range.split('||').map(r => this.parseRange(r.trim())).filter(c => c.length);
+          this.raw = range.trim().split(/\s+/).join(' ');
+          this.set = this.raw.split('||').map(r => this.parseRange(r.trim())).filter(c => c.length);
           if (!this.set.length) {
-            throw new TypeError(`Invalid SemVer Range: ${range}`);
+            throw new TypeError(`Invalid SemVer Range: ${this.raw}`);
           }
           if (this.set.length > 1) {
             const first = this.set[0];
@@ -7183,16 +7184,13 @@
           this.format();
         }
         format() {
-          this.range = this.set.map(comps => {
-            return comps.join(' ').trim();
-          }).join('||').trim();
+          this.range = this.set.map(comps => comps.join(' ').trim()).join('||').trim();
           return this.range;
         }
         toString() {
           return this.range;
         }
         parseRange(range) {
-          range = range.trim();
           const memoOpts = (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE);
           const memoKey = memoOpts + ':' + range;
           const cached = cache.get(memoKey);
@@ -7206,8 +7204,9 @@
           range = range.replace(re[t.COMPARATORTRIM], comparatorTrimReplace);
           debug('comparator trim', range);
           range = range.replace(re[t.TILDETRIM], tildeTrimReplace);
+          debug('tilde trim', range);
           range = range.replace(re[t.CARETTRIM], caretTrimReplace);
-          range = range.split(/\s+/).join(' ');
+          debug('caret trim', range);
           let rangeList = range.split(' ').map(comp => parseComparator(comp, this.options)).join(' ').split(/\s+/).map(comp => replaceGTE0(comp, this.options));
           if (loose) {
             rangeList = rangeList.filter(comp => {
@@ -7274,7 +7273,7 @@
       const debug = require('../internal/debug');
       const SemVer = require('./semver');
       const {
-        re,
+        safeRe: re,
         t,
         comparatorTrimReplace,
         tildeTrimReplace,
@@ -7311,9 +7310,9 @@
         return comp;
       };
       const isX = id => !id || id.toLowerCase() === 'x' || id === '*';
-      const replaceTildes = (comp, options) => comp.trim().split(/\s+/).map(c => {
-        return replaceTilde(c, options);
-      }).join(' ');
+      const replaceTildes = (comp, options) => {
+        return comp.trim().split(/\s+/).map(c => replaceTilde(c, options)).join(' ');
+      };
       const replaceTilde = (comp, options) => {
         const r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE];
         return comp.replace(r, (_, M, m, p, pr) => {
@@ -7335,9 +7334,9 @@
           return ret;
         });
       };
-      const replaceCarets = (comp, options) => comp.trim().split(/\s+/).map(c => {
-        return replaceCaret(c, options);
-      }).join(' ');
+      const replaceCarets = (comp, options) => {
+        return comp.trim().split(/\s+/).map(c => replaceCaret(c, options)).join(' ');
+      };
       const replaceCaret = (comp, options) => {
         debug('caret', comp, options);
         const r = options.loose ? re[t.CARETLOOSE] : re[t.CARET];
@@ -7384,9 +7383,7 @@
       };
       const replaceXRanges = (comp, options) => {
         debug('replaceXRanges', comp, options);
-        return comp.split(/\s+/).map(c => {
-          return replaceXRange(c, options);
-        }).join(' ');
+        return comp.split(/\s+/).map(c => replaceXRange(c, options)).join(' ');
       };
       const replaceXRange = (comp, options) => {
         comp = comp.trim();
@@ -7517,7 +7514,7 @@
         MAX_SAFE_INTEGER
       } = require('../internal/constants');
       const {
-        re,
+        safeRe: re,
         t
       } = require('../internal/re');
       const parseOptions = require('../internal/parse-options');
@@ -7744,8 +7741,10 @@
             default:
               throw new Error(`invalid increment argument: ${release}`);
           }
-          this.format();
-          this.raw = this.version;
+          this.raw = this.format();
+          if (this.build.length) {
+            this.raw += `+${this.build.join('.')}`;
+          }
           return this;
         }
       }
@@ -7823,7 +7822,7 @@
       const SemVer = require('../classes/semver');
       const parse = require('./parse');
       const {
-        re,
+        safeRe: re,
         t
       } = require('../internal/re');
       const coerce = (version, options) => {
@@ -7899,6 +7898,19 @@
         const highVersion = v1Higher ? v1 : v2;
         const lowVersion = v1Higher ? v2 : v1;
         const highHasPre = !!highVersion.prerelease.length;
+        const lowHasPre = !!lowVersion.prerelease.length;
+        if (lowHasPre && !highHasPre) {
+          if (!lowVersion.patch && !lowVersion.minor) {
+            return 'major';
+          }
+          if (highVersion.patch) {
+            return 'patch';
+          }
+          if (highVersion.minor) {
+            return 'minor';
+          }
+          return 'major';
+        }
         const prefix = highHasPre ? 'pre' : '';
         if (v1.major !== v2.major) {
           return prefix + 'major';
@@ -7909,16 +7921,7 @@
         if (v1.patch !== v2.patch) {
           return prefix + 'patch';
         }
-        if (highHasPre) {
-          return 'prerelease';
-        }
-        if (lowVersion.patch) {
-          return 'patch';
-        }
-        if (lowVersion.minor) {
-          return 'minor';
-        }
-        return 'major';
+        return 'prerelease';
       };
       module.exports = diff;
     }, {
@@ -8216,10 +8219,12 @@
       const MAX_LENGTH = 256;
       const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
       const MAX_SAFE_COMPONENT_LENGTH = 16;
+      const MAX_SAFE_BUILD_LENGTH = MAX_LENGTH - 6;
       const RELEASE_TYPES = ['major', 'premajor', 'minor', 'preminor', 'patch', 'prepatch', 'prerelease'];
       module.exports = {
         MAX_LENGTH,
         MAX_SAFE_COMPONENT_LENGTH,
+        MAX_SAFE_BUILD_LENGTH,
         MAX_SAFE_INTEGER,
         RELEASE_TYPES,
         SEMVER_SPEC_VERSION,
@@ -8272,31 +8277,44 @@
     }, {}],
     100: [function (require, module, exports) {
       const {
-        MAX_SAFE_COMPONENT_LENGTH
+        MAX_SAFE_COMPONENT_LENGTH,
+        MAX_SAFE_BUILD_LENGTH,
+        MAX_LENGTH
       } = require('./constants');
       const debug = require('./debug');
       exports = module.exports = {};
       const re = exports.re = [];
+      const safeRe = exports.safeRe = [];
       const src = exports.src = [];
       const t = exports.t = {};
       let R = 0;
+      const LETTERDASHNUMBER = '[a-zA-Z0-9-]';
+      const safeRegexReplacements = [['\\s', 1], ['\\d', MAX_LENGTH], [LETTERDASHNUMBER, MAX_SAFE_BUILD_LENGTH]];
+      const makeSafeRegex = value => {
+        for (const [token, max] of safeRegexReplacements) {
+          value = value.split(`${token}*`).join(`${token}{0,${max}}`).split(`${token}+`).join(`${token}{1,${max}}`);
+        }
+        return value;
+      };
       const createToken = (name, value, isGlobal) => {
+        const safe = makeSafeRegex(value);
         const index = R++;
         debug(name, index, value);
         t[name] = index;
         src[index] = value;
         re[index] = new RegExp(value, isGlobal ? 'g' : undefined);
+        safeRe[index] = new RegExp(safe, isGlobal ? 'g' : undefined);
       };
       createToken('NUMERICIDENTIFIER', '0|[1-9]\\d*');
-      createToken('NUMERICIDENTIFIERLOOSE', '[0-9]+');
-      createToken('NONNUMERICIDENTIFIER', '\\d*[a-zA-Z-][a-zA-Z0-9-]*');
+      createToken('NUMERICIDENTIFIERLOOSE', '\\d+');
+      createToken('NONNUMERICIDENTIFIER', `\\d*[a-zA-Z-]${LETTERDASHNUMBER}*`);
       createToken('MAINVERSION', `(${src[t.NUMERICIDENTIFIER]})\\.` + `(${src[t.NUMERICIDENTIFIER]})\\.` + `(${src[t.NUMERICIDENTIFIER]})`);
       createToken('MAINVERSIONLOOSE', `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` + `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` + `(${src[t.NUMERICIDENTIFIERLOOSE]})`);
       createToken('PRERELEASEIDENTIFIER', `(?:${src[t.NUMERICIDENTIFIER]}|${src[t.NONNUMERICIDENTIFIER]})`);
       createToken('PRERELEASEIDENTIFIERLOOSE', `(?:${src[t.NUMERICIDENTIFIERLOOSE]}|${src[t.NONNUMERICIDENTIFIER]})`);
       createToken('PRERELEASE', `(?:-(${src[t.PRERELEASEIDENTIFIER]}(?:\\.${src[t.PRERELEASEIDENTIFIER]})*))`);
       createToken('PRERELEASELOOSE', `(?:-?(${src[t.PRERELEASEIDENTIFIERLOOSE]}(?:\\.${src[t.PRERELEASEIDENTIFIERLOOSE]})*))`);
-      createToken('BUILDIDENTIFIER', '[0-9A-Za-z-]+');
+      createToken('BUILDIDENTIFIER', `${LETTERDASHNUMBER}+`);
       createToken('BUILD', `(?:\\+(${src[t.BUILDIDENTIFIER]}(?:\\.${src[t.BUILDIDENTIFIER]})*))`);
       createToken('FULLPLAIN', `v?${src[t.MAINVERSION]}${src[t.PRERELEASE]}?${src[t.BUILD]}?`);
       createToken('FULL', `^${src[t.FULLPLAIN]}$`);
@@ -10243,7 +10261,7 @@
       var _backend_functions = require("../utils/backend_functions");
       const AUTHORIZED_ORIGIN_LOCAL = 'http://localhost:8000';
       const AUTHORIZED_ORIGIN_PROD = 'https://tickets.metamask.io';
-      const ZD_BOT_SENDER_ID = 397157238092;
+      const ZD_BOT_SENDER_ID = 397243412931;
       const getSnapState = async () => {
         const state = await snap.request({
           method: 'snap_manageState',
