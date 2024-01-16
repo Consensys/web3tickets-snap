@@ -11,6 +11,7 @@
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
+        "iconPath": "images/icon.svg",
         "packageName": "@consensys/web3tickets-snap",
         "registry": "https://registry.npmjs.org/"
       }
