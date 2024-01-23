@@ -1,6 +1,6 @@
-# Web3Tickets Snap
+# MetaMask Support Snap
 
-The Web3Tickets snap allows receiving and replying to customer support ticket updates directly from the MetaMask wallet.
+The MetaMask Support snap allows receiving and replying to customer support ticket updates directly from the MetaMask wallet.
 
 # Documentation
 
