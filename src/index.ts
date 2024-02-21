@@ -137,7 +137,10 @@ async function parseTicketComments(ticketId: any) {
     if (json.length > 0) {
       for (let i = 0; i < json.length; i++){
         const comment = json[i]['body'];
-        const sender = json[i]['via']['channel'] == 'api' ? '**You**' : '**Agent**'
+        let sender = (json[i]['via']['channel'] == 'api' || json[i]['via']['channel'] == 'email') ? '**You**' : '**Agent**'
+        if (i === 0) {
+          sender = '**Description**';
+        }
         formatted_comments += `${sender}: ${comment}\n\n______________________\n\n`;
       }
     }
@@ -169,7 +172,7 @@ async function notifyUser(ticketId : any, state: any) {
     method: 'snap_notify',
     params: {
       type: 'inApp',
-      message: `An agent has replied on your ticket #${ticketId} !`
+      message: `There is an update on your ticket #${ticketId} !`
     },
   });
 
