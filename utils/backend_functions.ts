@@ -75,7 +75,7 @@ export async function update_ticket(ticket_id: any, input_data: any, req_address
             body: JSON.stringify(input_data)
         }).then(response => response.json())
             .then(json => {
-                console.log('POST update response: ', json);
+                // console.log('POST update response: ', json);
                 return 200;
             })
     }

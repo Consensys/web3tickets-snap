@@ -226,6 +226,13 @@ export const onCronjob: OnCronjobHandler = async ({ request }) => {
   
   switch (request.method) {
     case 'fireCronjob':
+      const { locked } = await snap.request({
+        method: 'snap_getClientStatus'
+      });
+
+      // only continue polling if wallet is unlocked
+      if (locked) return;
+      
       const state = await getSnapState();
 
       // for production:
