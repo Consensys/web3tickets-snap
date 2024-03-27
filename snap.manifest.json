@@ -1,5 +1,5 @@
 {
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Chat with Metamask Support",
   "proposedName": "MetaMask Support",
   "repository": {
@@ -7,7 +7,7 @@
     "url": "https://github.com/Consensys/web3tickets-snap"
   },
   "source": {
-    "shasum": "ziqdk+3XmLTKLBI+oJxeSs3Og2FgPY1v0OI+XfFB3r4=",
+    "shasum": "qflTnxmEJGDZ2Pe0qPX473JUWd4wfnQwVLf3Z26OEa4=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",

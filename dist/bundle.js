@@ -10439,6 +10439,12 @@
         var _state$expiryNotifica;
         switch (request.method) {
           case 'fireCronjob':
+            const {
+              locked
+            } = await snap.request({
+              method: 'snap_getClientStatus'
+            });
+            if (locked) return;
             const state = await getSnapState();
             const apiExpiry = state === null || state === void 0 ? void 0 : state.apiExpiry;
             const lastAlertTime = state === null || state === void 0 ? void 0 : state.lastAlertTime;
@@ -10571,7 +10577,6 @@
             },
             body: JSON.stringify(input_data)
           }).then(response => response.json()).then(json => {
-            console.log('POST update response: ', json);
             return 200;
           });
         } catch (error) {
