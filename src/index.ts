@@ -1,24 +1,118 @@
 import { OnRpcRequestHandler, OnCronjobHandler } from '@metamask/snaps-types';
 import { panel, text, heading } from '@metamask/snaps-ui'; 
-import { get_user_tickets, get_ticket_comments, update_ticket } from '../utils/backend_functions';
+import { get_user_tickets, get_ticket_comments, update_ticket, set_snap_dialog } from '../utils/backend_functions';
+
+import { createInterface, goBack, refreshHomepage, showConfirmationMessage, showFailedMessage, showLoadingSpinner, showSettings, showTicket, showTicketList } from './ui';
+import { OnUserInputHandler, UserInputEventType, button, divider, spinner } from '@metamask/snaps-sdk';
 
 const AUTHORIZED_ORIGIN_LOCAL = 'http://localhost:8000';
 const AUTHORIZED_ORIGIN_PROD = 'https://tickets.metamask.io';
 const ZD_BOT_SENDER_ID = 397243412931;
 
-const getSnapState = async () => {
+let interfaceId = null;
+
+export const onHomePage = async () => {
+  const state = await getSnapState();
+  const address = state?.address as string
+  const apiKey = state?.apiKey as string
+  interfaceId = await createInterface( address, apiKey);
+  return { id: interfaceId };
+};
+
+// dialog can be true or false, true == MM snaps notifications chosen
+// false == browser notifications chosen
+const updateNotificationSettings = async (id, dialog) => {
+  const state = await getSnapState();
+  await showLoadingSpinner(id, 'notification-settings');
+  const success = await set_snap_dialog(dialog, state.address, state.apiKey);
+  const notification_type = dialog === true ? 'Metamask Snap notifications' : 'browser native notifications';
+  if (success) {
+    await showConfirmationMessage(id, `Notifications are now set to ${notification_type}.`);
+  }
+  else {
+    await showFailedMessage(id, 'Failed to save notifications settings. Please try again...');
+  }
+
+  // dialog needs to be string in state
+  const new_dialog = dialog === true ? 'true' : 'false';
+  await setSnapState(state.apiKey as string, state.address as string, state.ticketUpdates, new_dialog, state.apiExpiry as string, state.expiryNotificationsCount, state.lastAlertTime, state.cachedTicketData);
+}
+
+
+export const onUserInput: OnUserInputHandler = async ({ id, event }) => {
+  
+  if (event.type === UserInputEventType.ButtonClickEvent) {
+    if (event.name.startsWith('showTicket-')) {
+      const ticketId = event.name.split("-")[1]
+      try {
+        await showLoadingSpinner(id, 'loading-ticket');
+        await snap.request({
+          method: 'snap_updateInterface',
+          params: {
+            id,
+            ui: await showTicket(ticketId),
+          },
+        });
+      }
+      catch (error) {
+        console.log(error);
+      }
+    }
+    else if (event.name === 'go-back') {
+      await showLoadingSpinner(id, 'loading-goback');
+      await goBack(id);
+    }
+    else if (event.name === 'notification-settings') {
+      await showSettings(id);
+    }
+    else if (event.name === 'message-sent-ok-button') {
+      await showLoadingSpinner(id, 'loading-homepage');
+      await refreshHomepage(id);
+    }
+    else if (event.name === 'notif-choice-snap'){
+      await updateNotificationSettings(id, true);
+    }
+    else if (event.name === 'notif-choice-browser'){
+      await updateNotificationSettings(id, false);
+    }
+    
+  }
+
+  if (
+    event.type === UserInputEventType.FormSubmitEvent &&
+    event.name.startsWith('sendcomment-')
+  ) {
+    await showLoadingSpinner(id, 'loading-comment');
+    const ticketId = event.name.split('-')[1];
+    const comment = event.value['sendcomment-input'];
+    const state = await getSnapState();
+    const address = state?.address as string;
+    const apiKey = state?.apiKey as string;
+
+    const updated = await update_ticket(ticketId, comment, address, apiKey);
+    
+    if (updated === true) {
+      await showConfirmationMessage(id, 'Our support team has received your comment.');
+    }
+    else {
+      console.log('Ticket update failed');
+      await showFailedMessage(id, 'The comment could not be sent. Please try again or use the [dashboard](https://tickets.metamask.io) to update your tickets.');
+    }
+  }
+};
+
+export const getSnapState = async () => {
   const state = await snap.request({
     method: 'snap_manageState',
     params: {
       operation: 'get',
     },
   });
-
   return state;
 };
 
-const setSnapState = async (apiKey: string | null, address: string | null, ticketUpdates: any, dialog : string | null, apiExpiry : string | null, expiryNotificationsCount : any, lastAlertTime : any) => {
-  
+export const setSnapState = async (apiKey: string | null, address: string | null, ticketUpdates: any, dialog: string | null,
+  apiExpiry: string | null, expiryNotificationsCount: any, lastAlertTime: any, cachedTicketData: any) => { 
   return snap.request({
     method: 'snap_manageState',
     params: {
@@ -30,7 +124,8 @@ const setSnapState = async (apiKey: string | null, address: string | null, ticke
         dialog,
         apiExpiry,
         expiryNotificationsCount,
-        lastAlertTime
+        lastAlertTime,
+        cachedTicketData
       },
     },
   });
@@ -58,7 +153,6 @@ const compareStates = (prev_ticketUpdates: any, current_ticketUpdates: any) => {
 }
 
 
-// previously named fetchAllTicketCommentsCount
 // checks for ticket updates and returns a list of ticket IDs that have received an
 // update since the last cronjob run - which occurs every 30 seconds
 const checkTicketUpdates = async () => {
@@ -79,6 +173,7 @@ const checkTicketUpdates = async () => {
   const prev_ticketUpdates = state?.ticketUpdates;
   const expiryNotificationsCount = state?.expiryNotificationsCount as number;
   const lastAlertTime = state?.lastAlertTime as string;
+  const cachedTicketData = state?.cachedTicketData;
 
   try {
     const json : any = await get_user_tickets(address, apiKey);
@@ -111,18 +206,19 @@ const checkTicketUpdates = async () => {
   // if it's the first iteration of the cronjob just initialise the state
   if (!prev_ticketUpdates) {
     console.log('Initialising state...');
-    setSnapState(apiKey, address, ticketUpdates, dialog, apiExpiry, expiryNotificationsCount, lastAlertTime);
+    await setSnapState(apiKey, address, ticketUpdates, dialog, apiExpiry, expiryNotificationsCount, lastAlertTime, cachedTicketData);
   }
   else {
     updatedTicketIds = compareStates(prev_ticketUpdates, ticketUpdates);
     if (updatedTicketIds?.length > 0) {
       console.log('Found updates for the following tickets: ', updatedTicketIds);
     }
-    setSnapState(apiKey, address, ticketUpdates, dialog, apiExpiry, expiryNotificationsCount, lastAlertTime);
+    await setSnapState(apiKey, address, ticketUpdates, dialog, apiExpiry, expiryNotificationsCount, lastAlertTime, cachedTicketData);
   }
 
   return updatedTicketIds;
 }
+
 
 async function parseTicketComments(ticketId: any) {
   const state = await getSnapState();
@@ -145,9 +241,8 @@ async function parseTicketComments(ticketId: any) {
       }
     }
   })
-
   return formatted_comments;
-}
+} 
 
 
 // updates a ticket with user's new comment, from the notification dialog box
@@ -226,6 +321,7 @@ export const onCronjob: OnCronjobHandler = async ({ request }) => {
   
   switch (request.method) {
     case 'fireCronjob':
+
       const { locked } = await snap.request({
         method: 'snap_getClientStatus'
       });
@@ -263,7 +359,7 @@ export const onCronjob: OnCronjobHandler = async ({ request }) => {
             ])
           },
         })
-        setSnapState(state?.apiKey as string, state?.address as string, state?.ticketUpdates, state?.dialog as string, state?.apiExpiry as string, alertsCount + 1, currentTime as unknown as string);
+        await setSnapState(state?.apiKey as string, state?.address as string, state?.ticketUpdates, state?.dialog as string, state?.apiExpiry as string, alertsCount + 1, currentTime as unknown as string, state?.cachedTicketData);
       }
       else {
         // only go on if api key is not expired i.e. alertsCount === 0
@@ -303,8 +399,8 @@ export const onRpcRequest: OnRpcRequestHandler = async ({  origin, request }) =>
   
   switch (request.method) {
     
+    // this is called by the dashboard when first logging in or changing notification settings
     case 'set_snap_state':
-      //console.log(request.params.apiKey, request.params.address, request.params.dialog);
       if (
         (request.params &&
           'apiKey' in request.params &&
@@ -317,7 +413,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({  origin, request }) =>
           'apiExpiry' in request.params && 
           typeof request.params.apiExpiry === 'string'
       ) {
-        await setSnapState(request.params.apiKey, request.params.address, undefined, request.params.dialog, request.params.apiExpiry, undefined, undefined);
+        await setSnapState(request.params.apiKey, request.params.address, undefined, request.params.dialog, request.params.apiExpiry, undefined, undefined, undefined);
         return true;
       }
 
