@@ -13,8 +13,8 @@ let interfaceId = null;
 
 export const onHomePage = async () => {
   const state = await getSnapState();
-  const address = state?.address as string
-  const apiKey = state?.apiKey as string
+  const address = state?.address as string;
+  const apiKey = state?.apiKey as string;
   interfaceId = await createInterface( address, apiKey);
   return { id: interfaceId };
 };

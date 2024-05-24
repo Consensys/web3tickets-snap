@@ -16,6 +16,10 @@ import {
   
   export async function showTicketList(address, apiKey) {
     const ticket_data = await get_user_tickets(address, apiKey);
+    
+    // when apiKey is old / wrong ticket_data will be null
+    if (ticket_data === null)
+      return null;
     const tickets = ticket_data.rows;
     let cachedTicketData = {
       comments: {},
@@ -61,7 +65,20 @@ import {
   export async function createInterface( address, apiKey) {
   
     console.log("Creating interface...");
-    const flatTicketUIs = await showTicketList( address, apiKey);
+
+    const flatTicketUIs = await showTicketList(address, apiKey);
+    
+    // if apiKey is old or wrong, prompt the user to login again in the dashboard
+    if (flatTicketUIs === null)
+      return await snap.request({
+        method: 'snap_createInterface',
+        params: {
+          ui: panel([
+            heading('Almost there!'),
+            text('To access the Snap homepage, where you can view and update your support tickets, please log in through your [dashboard](https://tickets.metamask.io) first, then reopen the snap.')
+          ]),
+        }
+      })
   
     return await snap.request({
       method: 'snap_createInterface',

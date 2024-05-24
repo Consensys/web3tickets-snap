@@ -1,6 +1,6 @@
 {
   "name": "@consensys/web3tickets-snap",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Metamask Snap to get ticket message notifications directly in the MetaMask browser extension!",
   "repository": {
     "type": "git",
