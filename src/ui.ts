@@ -16,10 +16,10 @@ import {
   
   export async function showTicketList(address, apiKey) {
     const ticket_data = await get_user_tickets(address, apiKey);
+    
     // when apiKey is old / wrong ticket_data will be null
     if (ticket_data === null)
       return null;
-
     const tickets = ticket_data.rows;
     let cachedTicketData = {
       comments: {},
@@ -65,6 +65,7 @@ import {
   export async function createInterface( address, apiKey) {
   
     console.log("Creating interface...");
+
     const flatTicketUIs = await showTicketList(address, apiKey);
     
     // if apiKey is old or wrong, prompt the user to login again in the dashboard
